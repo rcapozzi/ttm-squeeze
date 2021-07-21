@@ -1,13 +1,27 @@
-import os, pandas
+import os
+import os.path
+import pandas as pd
+import yfinance as yf
 import plotly.graph_objects as go
+import datetime 
+from pathlib import Path
 
 dataframes = {}
 
+def load_symbol(symbol):
+    file = f"datasets/{symbol}.csv.gz"
+    if os.path.isfile(file):
+        df = pd.read_csv(file)
+    else:
+        start_dt = datetime.datetime.now() - datetime.timedelta(days = 50)
+        start_str = start_dt.strftime("%Y-%m-%d")
+        df = yf.download(symbol, start=start_str)
+        df.to_csv(file,index=True)
+    return df
+
 for filename in os.listdir('datasets'):
-    #print(filename)
     symbol = filename.split(".")[0]
-    #print(symbol)
-    df = pandas.read_csv('datasets/{}'.format(filename))
+    df = load_symbol(symbol)
     if df.empty:
         continue
 
@@ -28,7 +42,9 @@ for filename in os.listdir('datasets'):
     df['squeeze_on'] = df.apply(in_squeeze, axis=1)
 
     if df.iloc[-3]['squeeze_on'] and not df.iloc[-1]['squeeze_on']:
-        print("{} is coming out the squeeze".format(symbol))
+        print(f"{symbol} ON")
+    elif df.iloc[-3]['squeeze_on'] and df.iloc[-2]['squeeze_on'] and df.iloc[-1]['squeeze_on']:
+        print(f"{symbol} REST")
 
     # save all dataframes to a dictionary
     # we can chart individual names below by calling the chart() function

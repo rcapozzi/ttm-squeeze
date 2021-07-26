@@ -2,7 +2,8 @@ import sys
 import time
 import datetime as dt
 import pandas as pd
-import pandas_ta as ta
+#import pandas_ta as ta
+import ta
 import yfinance as yf
 import matplotlib.pyplot as plt
 import os
@@ -40,56 +41,21 @@ def rsi_momo_strategy(symbol, df, params):
     #print(f'rsi_momo_strategy: {symbol} {params}')
     stop_loss_pct = params['stop_loss_pct']
     df = df.copy()
-    df['rsi'] = df.ta.rsi()
-    df['sma'] = df.ta.sma(params['sma_period'])
+    #df['rsi'] = df.ta.rsi()
+    #df['sma'] = df.ta.sma(params['sma_period'])
+    df['rsi'] = ta.momentum.rsi(df.close,window=10)
+    df['sma'] = ta.trend.sma_indicator(df.close, window=params['sma_period'])
+
     df.dropna(inplace=True)
     
     # The DF is daily, and therefor has no weekends and timedelta is not needed.
     cutoff = df.tail(params['max_lookahead']+1).index.min()
-    signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.index < cutoff)]
+    #signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.index < cutoff)]
+    # A Cross over from prior period
+    signals = df.loc[(df.close > df.sma) & (df.rsi > params['rsi_entry']) & (df.shift(1).rsi < params['rsi_entry']) & (df.index < cutoff)]
     #if len(signals) == 0:
     #    print(f'rsi_momo_strategy: {symbol} No signals')
     #signals = signals.loc[(signals.index > '2014-10-01') & (signals.index < '2014-10-26')]
-    trades = []
-    for idx, row in signals.iterrows():
-        if in_trade(idx, trades): continue
-        iloc = df.index.get_loc(idx)
-        buy_day = df.iloc[iloc+1]
-        sell_stop = None
-        if params['stop_loss_pct']:
-            sell_stop = buy_day.open * (1.0 - (params['stop_loss_pct']/100))
-        sell_day = None
-        sell_descr = 'max_days'
-        for j in range(1,params['max_lookahead']):
-            this_day = df.iloc[iloc + j]
-            sell_day = df.iloc[iloc + j + 1]
-            if this_day.rsi > params['rsi_exit']:
-                sell_descr = 'xOverRSI'
-                break
-            if sell_stop and this_day.low < sell_stop:
-                sell_descr = 'stop_loss'
-                break
-        pct_return = sell_day.open / buy_day.open - 1
-        #print(f'i:{i:03d} iloc:{iloc:05d} buy_on:{buy_day.name} sell_on:{sell_day.name}')
-        trades.append([symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr])
-    return pd.DataFrame(trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr'])
-
-def rsi_momo_strategy_lambda(symbol, df, params):
-    #print(f'rsi_momo_strategy: {symbol} {params}')
-    stop_loss_pct = params['stop_loss_pct']
-    df = df.copy()
-    df['rsi'] = df.ta.rsi()
-    df['sma'] = df.ta.sma(params['sma_period'])
-    df.dropna(inplace=True)
-    
-    cutoff = df.tail(params['max_lookahead']+1).index.min()
-    signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.index < cutoff)]
-
-    #def process_signals()
-    trades = signals.copy()
-    signals['TBD'] = signals.apply(lambda x: x if x > 0 else 0)
-
-
     trades = []
     for idx, row in signals.iterrows():
         if in_trade(idx, trades): continue
@@ -151,14 +117,7 @@ def uberdf_load_all():
 
 def uberdf_one_config(udf, params):
     print(f'uberdf_one_config: params={params}')
-    start = time.time()
-    if len(udf) == 0:
-        print(f'Loading history from filesystem')
-        udf = {}
-        for filename in os.listdir('datasets'):
-            symbol = filename.split(".")[0]
-            udf[symbol] = load_symbol(symbol)
-    
+    start = time.time()    
     frames = []
     i = 0
     for symbol in udf.keys():

@@ -1,7 +1,6 @@
 #!/bin/sh
 
-runone(){
-	python3 ./rsi_momo.py $1 $2 > rsi_momo.$1.out
-}
+exec python3 ./rsi_momo.py $1 $2 > results/rsi_momo.$1.out
 
-seq 1 10 | xargs -l -I'{}' -P 4 ./runit.sh {} 10
+#mkdir -p results
+#seq 1 10 | xargs -l -I'{}' -P 3 runone {} 10

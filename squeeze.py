@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import os.path
 import pandas as pd
@@ -9,10 +11,19 @@ from pathlib import Path
 
 dataframes = {}
 
+def symbolsfor(str):
+    if str == 'SPX':
+        df = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+        tickers =  [i.replace('.','-') for i in df.Symbol.to_list()]
+    elif str == 'NDX':
+        df = pd.read_html('https://en.wikipedia.org/wiki/Nasdaq-100', attrs = {'id': 'constituents'})[0]
+        tickers = df.Ticker.values
+    return tickers
+
 def load_symbol(symbol):
     file = f"datasets/{symbol}.csv.gz"
     if os.path.isfile(file):
-        df = pd.read_csv(file)
+        df = pd.read_csv(file, index_col='Date', parse_dates=True)
     else:
         start_dt = datetime.datetime.now() - datetime.timedelta(days = 50)
         start_str = start_dt.strftime("%Y-%m-%d")
@@ -28,6 +39,13 @@ def is_ema_stacked(df):
         df.ta.ema(21).iloc[-1],
         df.ta.ema(34).iloc[-1]
     ]
+    ema = pd.concat({
+        'ema8': df.ta.ema(8),
+        'ema21': df.ta.ema(21),
+        'ema34': df.ta.ema(34)
+        }, axis=1)
+    ema['stack_bull'] = (ema.ema8 > ema.ema21) & (ema.ema21 > ema.ema34)
+    ema['stack_bear'] = (ema.ema8 < ema.ema21) & (ema.ema21 < ema.ema34)
     return avg[0] > avg[1] and avg[1] > avg[2]
 
 def inspect_squeeze(symbol, df=None):
@@ -123,6 +141,33 @@ for filename in os.listdir('datasets'):
     # elif df.iloc[-3]['squeeze_on'] and df.iloc[-2]['squeeze_on'] and df.iloc[-1]['squeeze_on']:
     #     print(f"{symbol} REST")
 
+def getSignals_v(df):
+    df['rsi'] = df.ta.rsi()
+    df['sma'] = df.ta.sma(200)
+    df.dropna(inplace=True)
+    
+    stop_loss_pct = 4.0
+    max_lookahead = 11
+    cutoff = df.tail(max_lookahead).index.min()
+    signals = df.loc[(df.close > df.sma) & (df.rsi < 30) & (df.index < cutoff)]
+    signals = signals[signals.index < df.index.max() - dt.timedelta(days=15)]
+    bdates, sdates = [], []
+    trades = []
+    for idx, row in signals.iterrows():
+        iloc = df.index.get_loc(idx)
+        buy_day = df.iloc[iloc+1]
+        sell_stop = buy_day.open * (1.0 - (stop_loss_pct/100)
+        bdates.append(buy_day.name)
+        sell_day = None
+        for j in range(1,max_lookahead):
+            this_day = df.iloc[iloc+j]
+            sell_day = df.iloc[iloc+1+j+1]
+            if this_day.rsi > 40: break
+        sdates.append(sell_day.name)
+        trades.append(buy_day.name, buy_day.open, )
+        #print(f'i:{i:03d} iloc:{iloc:05d} buy_on:{buy_day.name} sell_on:{sell_day.name}')
+    df = pd.DataFrame(trades, columns=['A', 'B', 'C'])
+    return bdates, sdates
 
 
 def chart(df):

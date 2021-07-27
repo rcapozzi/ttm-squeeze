@@ -27,7 +27,8 @@ def load_symbol(symbol):
     else:
         start_dt = datetime.datetime.now() - datetime.timedelta(days = 50)
         start_str = start_dt.strftime("%Y-%m-%d")
-        df = yf.download(symbol, progress=False, period='3mo') #start=start_str)
+        #df = yf.download(symbol, progress=False, period='3mo') #start=start_str)
+        df = yf.download(symbol, progress=False, start='2005-01-01')
         df.columns = df.columns.str.lower()
         df.to_csv(file,index=True)
     df.name = symbol

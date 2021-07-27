@@ -100,37 +100,40 @@ def load_symbol(symbol):
     df.name = symbol
     return df
 
-def uberdf_load_all():
+
+def uberdf_load_all(filename):
+    symbols = []
     start = time.time()
     frames = {}
-    i = 0
-    for filename in os.listdir('datasets'):
-        i += 1
-        #if i > 5: break
-        symbol = filename.split(".")[0]
+
+    with open(filename) as f:
+        lines = f.read().splitlines()
+        for s in lines: symbols.append(s)
+
+    # for filename in os.listdir('datasets'):
+    #     s = filename.split(".")[0]
+    #     symbols.append(s)
+
+    for symbol in symbols:
         df = load_symbol(symbol)
         if df.empty: continue
         frames[symbol] = df
     end = time.time()
-    print(f'uberdf_load_all: elapsed: {end - start:0.2f}')
+    print(f'uberdf_load_all: elapsed: {end - start:0.2f} size={len(frames)}')
     return frames
 
 def uberdf_one_config(udf, params):
     print(f'uberdf_one_config: params={params}')
     start = time.time()    
     frames = []
-    i = 0
     for symbol in udf.keys():
-        i += 1
-        #if i > 2: break
         df = udf[symbol]
         df = rsi_momo_strategy(symbol, df, params)
-        #    print(f'backtest {i:04d}:{symbol:6s} buys:{df.bprice.count()}  mean:{df.pct_return.mean():05.2f}')
         frames.append(df)
 
     xdf = pd.concat(frames)
     end = time.time()
-    params['elapsed'] = end - start
+    #params['elapsed'] = end - start
     params['trades'] = len(xdf)
     if len(xdf) > 0:        
         params['wins'] = wins = xdf.loc[xdf.pct_return > 0].pct_return.count()
@@ -161,9 +164,10 @@ def uberdf_main(shard_id=None,shard_max=None):
     print(f'uberdf_main: Elapsed: {end - start:0.2f}')
     return configs
 
-shard_id = int(sys.argv[1])
-shard_max = int(sys.argv[2])
+symbol_file = sys.argv[1]
+shard_id = int(sys.argv[2])
+shard_max = int(sys.argv[3])
 
-udf = uberdf_load_all()
+udf = uberdf_load_all(symbol_file)
 results = uberdf_main(shard_id, shard_max)
 

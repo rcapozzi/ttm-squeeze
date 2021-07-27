@@ -1,0 +1,8 @@
+QQQ
+SPY
+TLT
+XLF
+XLV
+XLP
+GLD
+VIX

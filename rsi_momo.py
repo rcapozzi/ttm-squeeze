@@ -18,8 +18,8 @@ def enumerate_params():
     for rsi_entry in range(15,36,5):
         for rsi_exit in range(20,46,5):
             if rsi_exit <= rsi_entry: continue
-            for sma_period in range(100,201,20):
-                for stop_loss_pct in range(0,9,2):
+            for sma_period in range(100,201,25):
+                for stop_loss_pct in [0, 5, 10]:
                     for max_trade_days in range(4,17,2):
                         param = dict(zip(keys, [rsi_entry, rsi_exit, sma_period, stop_loss_pct, max_trade_days
                 ]))
@@ -55,6 +55,9 @@ def rsi_momo_strategy(symbol, df, params):
     #df['sma'] = df.ta.sma(params['sma_period'])
     df['rsi'] = ta.momentum.rsi(df.close,window=10)
     df['sma'] = ta.trend.sma_indicator(df.close, window=params['sma_period'])
+    df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
+    #df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
+    df['adx'] = 0
 
     df.dropna(inplace=True)
     
@@ -85,8 +88,8 @@ def rsi_momo_strategy(symbol, df, params):
                 break
         pct_return = sell_day.open / buy_day.open - 1
         #print(f'i:{i:03d} iloc:{iloc:05d} buy_on:{buy_day.name} sell_on:{sell_day.name}')
-        trades.append([symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr])
-    df = pd.DataFrame(trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr'])
+        trades.append([symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, buy_day.atr, buy_day.adx])
+    df = pd.DataFrame(trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', 'atr', 'adx'])
     df['strategy'] = 'rsi_xover'
     return df
 
@@ -108,8 +111,8 @@ def load_symbol(symbol):
         df.to_csv(file,index=True)
     df['symbol'] = symbol
     df.name = symbol
-    if OPTS and OPTS['df_start_on']: df = df[df.index >= OPTS['df_start_on']]
-    if OPTS and OPTS['df_end_on']: df = df[df.index <= OPTS['df_end_on']]
+    if OPTS['df_start_on']: df = df[df.index >= OPTS['df_start_on']]
+    if OPTS['df_end_on']: df = df[df.index <= OPTS['df_end_on']]
     return df
 
 
@@ -151,7 +154,7 @@ def uberdf_one_config(udf, params):
     if len(df) > 0:
         df['days_open'] = (df.sdate - df.bdate).dt.days
         df['params_id'] = params['id']
-        df['params'] = str(params)
+        #df['params'] = str(params)
         filename=f'results/trades.{params["id"]}.csv.gz'
         print(f'uberdf_one_config: write df={filename}')
         df.to_csv(filename,index=True)

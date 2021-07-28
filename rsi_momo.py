@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import os
 pd.options.mode.chained_assignment = None
 
+# For the small ticker list of ETFs, these look optimal 35,45,160,0,12
 def enumerate_params():
     keys = ['rsi_entry', 'rsi_exit', 'sma_period', 'stop_loss_pct', 'max_trade_days']
     params =  []
@@ -21,6 +22,7 @@ def enumerate_params():
                     for max_trade_days in range(4,17,2):
                         param = dict(zip(keys, [rsi_entry, rsi_exit, sma_period, stop_loss_pct, max_trade_days
                 ]))
+                        i += 1
                         param['id'] = i
                         params.append(param)
     return params
@@ -129,6 +131,8 @@ def uberdf_load_all(filename):
     return frames
 
 def uberdf_one_config(udf, params):
+    #v = [ str(x) for x in params.values() ]
+    #v = ','.join(v)
     print(f'uberdf_one_config: params={params}')
     start = time.time()    
     frames = []
@@ -138,19 +142,22 @@ def uberdf_one_config(udf, params):
         frames.append(df)
 
     df = pd.concat(frames)
+    filename=f'results/trades.{params["id"]}.csv.gz'
+    df.to_csv(filename,index=True)
+    df['params_id'] = params['id']
+    df['params'] = str(params)
     end = time.time()
+
     params['elapsed'] = end - start
     params['mean'] = 0
     params['std'] = 0
     params['sum'] = 0
-
+    params['wins'] = 0
+    params['pct_wins'] = 0
     params['trades'] = len(df)
     if len(df) > 0:        
         params['wins'] = wins = df.loc[df.pct_return > 0].pct_return.count()
         params['pct_wins'] = params['wins'] / len(df)
-    else:
-        params['wins'] = 0
-        params['pct_wins'] = 0
         params['mean'] = df.pct_return.mean() 
         params['std'] = df.pct_return.std()
         params['sum'] = df.pct_return.sum()
@@ -179,7 +186,7 @@ shard_max = int(sys.argv[3])
 
 OPTS = {
     'df_start_on': '2007-01-01',
-    'df_end_on': '2013-01-01',
+    'df_end_on': '2012-01-01',
 }
 udf = uberdf_load_all(symbol_file)
 results = uberdf_main(shard_id, shard_max)

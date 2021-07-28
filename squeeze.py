@@ -15,6 +15,9 @@ def symbolsfor(str):
     if str == 'SPX':
         df = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
         tickers =  [i.replace('.','-') for i in df.Symbol.to_list()]
+    elif str == 'SP100':
+        df = pd.read_html('https://en.wikipedia.org/wiki/S%26P_100')[2]
+        tickers =  [i.replace('.','-') for i in df.Symbol.to_list()]
     elif str == 'NDX':
         df = pd.read_html('https://en.wikipedia.org/wiki/Nasdaq-100', attrs = {'id': 'constituents'})[0]
         tickers = df.Ticker.values

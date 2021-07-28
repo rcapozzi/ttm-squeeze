@@ -2,6 +2,7 @@ import sys
 import time
 import datetime as dt
 import pandas as pd
+import random
 #import pandas_ta as ta
 import ta
 import yfinance as yf
@@ -18,13 +19,16 @@ def enumerate_params():
         for rsi_exit in range(20,46,5):
             if rsi_exit <= rsi_entry: continue
             for sma_period in range(100,201,20):
-                for stop_loss_pct in range(0,6,1):
+                for stop_loss_pct in range(0,9,2):
                     for max_trade_days in range(4,17,2):
                         param = dict(zip(keys, [rsi_entry, rsi_exit, sma_period, stop_loss_pct, max_trade_days
                 ]))
                         i += 1
                         param['id'] = i
                         params.append(param)
+    if OPTS['is_test']:
+        params = random.sample(params,10)
+        print(f'enumerate_params: test enabled params len={len(params)}')
     return params
 
 def enumerate_params_products():
@@ -33,7 +37,7 @@ def enumerate_params_products():
     r_rsi_entry = list(range(15,31,5))
     r_rsi_exit = list(range(35,46,5))
     r_sma_period = list(range(100,201,20))
-    r_stop_loss_pct = list(range(0,6,1))
+    r_stop_loss_pct = list(range(0,9,2))
     r_max_trade_days = list(range(4,17,2))
     list(itertools.product(r_rsi_entry,r_rsi_exit, r_sma_period, r_stop_loss_pct, r_max_trade_days))
     return params
@@ -114,9 +118,11 @@ def uberdf_load_all(filename):
     start = time.time()
     frames = {}
 
-    with open(filename) as f:
-        lines = f.read().splitlines()
-        for s in lines: symbols.append(s)
+    if type(filename) == str:
+        with open(filename) as f:
+            lines = f.read().splitlines()
+            for s in lines: symbols.append(s)
+    if type(filename) == list: symbols = filename
 
     # for filename in os.listdir('datasets'):
     #     s = filename.split(".")[0]
@@ -142,20 +148,22 @@ def uberdf_one_config(udf, params):
         frames.append(df)
 
     df = pd.concat(frames)
-    filename=f'results/trades.{params["id"]}.csv.gz'
-    df.to_csv(filename,index=True)
-    df['params_id'] = params['id']
-    df['params'] = str(params)
-    end = time.time()
+    if len(df) > 0:
+        df['days_open'] = (df.sdate - df.bdate).dt.days
+        df['params_id'] = params['id']
+        df['params'] = str(params)
+        filename=f'results/trades.{params["id"]}.csv.gz'
+        print(f'uberdf_one_config: write df={filename}')
+        df.to_csv(filename,index=True)
 
-    params['elapsed'] = end - start
+    params['elapsed'] = time.time() - start
     params['mean'] = 0
     params['std'] = 0
     params['sum'] = 0
     params['wins'] = 0
     params['pct_wins'] = 0
     params['trades'] = len(df)
-    if len(df) > 0:        
+    if len(df) > 0:
         params['wins'] = wins = df.loc[df.pct_return > 0].pct_return.count()
         params['pct_wins'] = params['wins'] / len(df)
         params['mean'] = df.pct_return.mean() 
@@ -167,8 +175,8 @@ def uberdf_one_config(udf, params):
     #print(df.pct_return.describe())
     return df
 
-def uberdf_main(shard_id=None,shard_max=None):
-    print(f'uberdf_main: id={shard_id} shard_max={shard_max}')
+def uberdf_shard(shard_id=None,shard_max=None):
+    print(f'uberdf_shard: id={shard_id} shard_max={shard_max}')
     start = time.time()
     configs = enumerate_params()
     for params in configs:
@@ -176,18 +184,21 @@ def uberdf_main(shard_id=None,shard_max=None):
         if i % shard_max != shard_id: continue
         uberdf_one_config(udf, params)
     end = time.time()
-    print(f'uberdf_main: Elapsed: {end - start:0.2f}')
+    print(f'uberdf_shard: Elapsed: {end - start:0.2f}')
     return configs
 
-# Process command line
-symbol_file = sys.argv[1]
-shard_id = int(sys.argv[2])
-shard_max = int(sys.argv[3])
-
 OPTS = {
+    'is_test': True,
     'df_start_on': '2007-01-01',
     'df_end_on': '2012-01-01',
 }
-udf = uberdf_load_all(symbol_file)
-results = uberdf_main(shard_id, shard_max)
+
+if __name__ == "__main__":
+    symbol_file = sys.argv[1]
+    shard_id = int(sys.argv[2]) - 1
+    shard_max = int(sys.argv[3])
+
+    udf = uberdf_load_all(symbol_file)
+    results = uberdf_shard(shard_id, shard_max)
+
 

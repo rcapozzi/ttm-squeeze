@@ -2,4 +2,5 @@ pandas
 plotly
 yfinance
 ta
+pandas_market_calendars
 

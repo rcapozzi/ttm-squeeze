@@ -56,6 +56,7 @@ def rsi_momo_strategy(symbol, df, params):
     df['rsi'] = ta.momentum.rsi(df.close,window=10)
     df['sma'] = ta.trend.sma_indicator(df.close, window=params['sma_period'])
     df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
+    df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
     #df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
     df['adx'] = 0
 
@@ -68,9 +69,10 @@ def rsi_momo_strategy(symbol, df, params):
     # A Cross over from prior period
     signals = df.loc[(df.close > df.sma) & (df.rsi > params['rsi_entry']) & (df.shift(1).rsi < params['rsi_entry']) & (df.index < cutoff)]
     trades = []
-    for idx, row in signals.iterrows():
-        if in_trade(idx, trades): continue
-        iloc = df.index.get_loc(idx)
+
+    def apply_trade(row, tag):
+        if in_trade(row.name, trades): return None
+        iloc = df.index.get_loc(row.name)
         buy_day = df.iloc[iloc+1]
         sell_stop = None
         if params['stop_loss_pct']:
@@ -87,10 +89,20 @@ def rsi_momo_strategy(symbol, df, params):
                 sell_descr = 'stop_loss'
                 break
         pct_return = sell_day.open / buy_day.open - 1
-        #print(f'i:{i:03d} iloc:{iloc:05d} buy_on:{buy_day.name} sell_on:{sell_day.name}')
-        trades.append([symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, buy_day.atr, buy_day.adx])
-    df = pd.DataFrame(trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', 'atr', 'adx'])
-    df['strategy'] = 'rsi_xover'
+        days_open = j
+        trades.append([symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, \
+                       params['id'], j, tag, buy_day.rsi, buy_day.sma, buy_day.atr, buy_day.adx])
+
+    # RSI xUnder
+    signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.index < cutoff)]
+    signals.apply(lambda row: apply_trade(row, 'rsi_xunder'), axis=1)
+
+    # RSI xOver
+    signals = df.loc[(df.close > df.sma) & (df.rsi > params['rsi_entry']) & (df.shift(1).rsi < params['rsi_entry']) & (df.index < cutoff)]
+    signals.apply(lambda row: apply_trade(row, 'rsi_xover'), axis=1)
+
+    df = pd.DataFrame(trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', \
+        'param_id', 'days_open', 'strategy', 'rsi', 'sma', 'atr', 'adx'])
     return df
 
 def myRSI(symbol):
@@ -152,9 +164,6 @@ def uberdf_one_config(udf, params):
 
     df = pd.concat(frames)
     if len(df) > 0:
-        df['days_open'] = (df.sdate - df.bdate).dt.days
-        df['params_id'] = params['id']
-        #df['params'] = str(params)
         filename=f'results/trades.{params["id"]}.csv.gz'
         print(f'uberdf_one_config: write df={filename}')
         df.to_csv(filename,index=True)
@@ -203,5 +212,3 @@ if __name__ == "__main__":
 
     udf = uberdf_load_all(symbol_file)
     results = uberdf_shard(shard_id, shard_max)
-
-

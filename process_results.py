@@ -2,6 +2,7 @@
 import os
 import sys
 import re
+import pandas as pd
 
 keys = ['rsi_entry',
  'rsi_exit',
@@ -34,6 +35,21 @@ def process_results_file(file):
         v = ','.join(v)
         print(v)
 
-v = ','.join(keys)
-print("#" + v)
-for f in sys.argv[1:]: process_results_file(f)
+import glob
+def process_trades():
+    ary = []
+    for filename in glob.glob('results/*.csv.gz'):
+        df = pd.read_csv(filename)
+        if len(df) == 0: continue
+        ary.append(df)
+    df = pd.concat(ary)
+    df['pct_sma'] = df.sma / df.bprice - 1
+    df['pct_atr'] = df.atr / df.bprice
+    df.to_csv('trades.csv',index=False)
+    return df
+
+df = process_trades()
+
+#v = ','.join(keys)
+#print("#" + v)
+#for f in sys.argv[1:]: process_results_file(f)

@@ -64,12 +64,8 @@ def rsi_momo_strategy(symbol, df, params):
     
     # The DF is daily, and therefor has no weekends and timedelta is not needed.
     cutoff = df.tail(params['max_trade_days']+1).index.min()
-    # A Cross under from prior period
-    #signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.index < cutoff)]
-    # A Cross over from prior period
-    signals = df.loc[(df.close > df.sma) & (df.rsi > params['rsi_entry']) & (df.shift(1).rsi < params['rsi_entry']) & (df.index < cutoff)]
-    trades = []
 
+    all_trades = []
     def apply_trade(row, tag):
         if in_trade(row.name, trades): return None
         iloc = df.index.get_loc(row.name)
@@ -90,19 +86,23 @@ def rsi_momo_strategy(symbol, df, params):
                 break
         pct_return = sell_day.open / buy_day.open - 1
         days_open = j
-        trades.append([symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, \
-                       params['id'], j, tag, buy_day.rsi, buy_day.sma, buy_day.atr, buy_day.adx])
+        data = [symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, \
+                       params['id'], j, tag, buy_day.rsi, buy_day.sma, buy_day.atr, buy_day.roc, buy_day.adx]
+        trades.append(data)
+        all_trades.append(data)
 
     # RSI xUnder
-    signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.index < cutoff)]
+    trades = []
+    signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.shift(1).rsi < params['rsi_entry']) & (df.index < cutoff)]
     signals.apply(lambda row: apply_trade(row, 'rsi_xunder'), axis=1)
 
     # RSI xOver
+    trades = []
     signals = df.loc[(df.close > df.sma) & (df.rsi > params['rsi_entry']) & (df.shift(1).rsi < params['rsi_entry']) & (df.index < cutoff)]
     signals.apply(lambda row: apply_trade(row, 'rsi_xover'), axis=1)
 
-    df = pd.DataFrame(trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', \
-        'param_id', 'days_open', 'strategy', 'rsi', 'sma', 'atr', 'adx'])
+    df = pd.DataFrame(all_trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', \
+        'param_id', 'days_open', 'strategy', 'rsi', 'sma', 'atr', 'roc', 'adx'])
     return df
 
 def myRSI(symbol):
@@ -119,7 +119,10 @@ def load_symbol(symbol):
     else:
         period = '3mo'
         df = yf.download(symbol, progress=False, start='2005-01-01')
+        df.reset_index(inplace=True)
         df.columns = df.columns.str.lower()
+        df.set_index('date', inplace=True)
+        df.symbol = symbol       
         df.to_csv(file,index=True)
     df['symbol'] = symbol
     df.name = symbol
@@ -152,39 +155,25 @@ def uberdf_load_all(filename):
     return frames
 
 def uberdf_one_config(udf, params):
-    #v = [ str(x) for x in params.values() ]
-    #v = ','.join(v)
     print(f'uberdf_one_config: params={params}')
     start = time.time()    
     frames = []
-    for symbol in udf.keys():
-        df = udf[symbol]
+    for symbol, df in udf.items():
         df = rsi_momo_strategy(symbol, df, params)
-        frames.append(df)
+        if len(df) > 0:
+            frames.append(df)
+    if len(frames) == 0:
+        return
 
     df = pd.concat(frames)
-    if len(df) > 0:
-        filename=f'results/trades.{params["id"]}.csv.gz'
-        print(f'uberdf_one_config: write df={filename}')
-        df.to_csv(filename,index=True)
+    for k, v in params.items():
+        df[k] = v                            
+    filename=f'results/trades.{params["id"]}.csv.gz'
+    print(f'uberdf_one_config: write df={filename}')
+    df.to_csv(filename,index=False)
 
-    params['elapsed'] = time.time() - start
-    params['mean'] = 0
-    params['std'] = 0
-    params['sum'] = 0
-    params['wins'] = 0
-    params['pct_wins'] = 0
     params['trades'] = len(df)
-    if len(df) > 0:
-        params['wins'] = wins = df.loc[df.pct_return > 0].pct_return.count()
-        params['pct_wins'] = params['wins'] / len(df)
-        params['mean'] = df.pct_return.mean() 
-        params['std'] = df.pct_return.std()
-        params['sum'] = df.pct_return.sum()
     print(f'uberdf_one_config: results={params}')
-    #print(f'uberdf_one_config: mean={params["mean"]:04.2f} std={params["sum"]:04.2f} sum={params["std"]:04.2f}')
-    #print(f'Summary: wins={wins} total={total} rate={wins/total*100:04.2f} pct_return={df.pct_return.mean()*100:05.2f}%')
-    #print(df.pct_return.describe())
     return df
 
 def uberdf_shard(shard_id=None,shard_max=None):
@@ -200,9 +189,14 @@ def uberdf_shard(shard_id=None,shard_max=None):
     return configs
 
 OPTS = {
-    'is_test': True,
+    'is_test': False,
     'df_start_on': '2007-01-01',
-    'df_end_on': '2012-01-01',
+    'df_end_on': '2021-06-01',
+}
+XOPTS = {
+    'is_test': True,
+    'df_start_on': '2016-01-01',
+    'df_end_on': '2021-01-01',
 }
 
 if __name__ == "__main__":

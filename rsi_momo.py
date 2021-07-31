@@ -1,6 +1,7 @@
 import sys
 import time
 import datetime as dt
+import numpy as np
 import pandas as pd
 import random
 #import pandas_ta as ta
@@ -18,9 +19,9 @@ def enumerate_params():
     for rsi_entry in range(15,36,5):
         for rsi_exit in range(20,46,5):
             if rsi_exit <= rsi_entry: continue
-            for sma_period in range(100,201,25):
+            for sma_period in range(50,201,50):
                 for stop_loss_pct in [0, 5, 10]:
-                    for max_trade_days in range(4,17,2):
+                    for max_trade_days in [2, 4, 8, 16]:
                         param = dict(zip(keys, [rsi_entry, rsi_exit, sma_period, stop_loss_pct, max_trade_days
                 ]))
                         i += 1
@@ -42,32 +43,42 @@ def enumerate_params_products():
     list(itertools.product(r_rsi_entry,r_rsi_exit, r_sma_period, r_stop_loss_pct, r_max_trade_days))
     return params
 
-def in_trade(idx, trades):
-    for t in trades:
-        if t[1] <= idx and t[3] > idx: return True
-    return False
-
-def rsi_momo_strategy(symbol, df, params):
+def rsi_momo_strategy(symbol, df_in, params):
     #print(f'rsi_momo_strategy: {symbol} {params}')
     stop_loss_pct = params['stop_loss_pct']
-    df = df.copy()
-    #df['rsi'] = df.ta.rsi()
-    #df['sma'] = df.ta.sma(params['sma_period'])
-    df['rsi'] = ta.momentum.rsi(df.close,window=10)
-    df['sma'] = ta.trend.sma_indicator(df.close, window=params['sma_period'])
-    df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
-    df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
-    #df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
-    df['adx'] = 0
-
-    df.dropna(inplace=True)
     
-    # The DF is daily, and therefor has no weekends and timedelta is not needed.
-    cutoff = df.tail(params['max_trade_days']+1).index.min()
-
     all_trades = []
+    trades = []
+    df = None
+    def setup(rsi_period):
+        trades = []
+        df = df_in.copy()
+        #df['rsi'] = df.ta.rsi()
+        #df['sma'] = df.ta.sma(params['sma_period'])
+        df['rsi'] = ta.momentum.rsi(df.close,window=10)
+        df['sma'] = ta.trend.sma_indicator(df.close, window=params['sma_period'])
+        df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
+        df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
+        #df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
+        df['adx'] = 0
+        df.dropna(inplace=True)
+        return df
+
+    # The DF is daily, and therefor has no weekends and timedelta is not needed.
+    cutoff = df_in.tail(params['max_trade_days']+1).index.min()
+
+    def in_trade(idx, tag):
+        for t in trades:
+            if t[1] <= idx and t[3] > idx:
+                #print(f'in_trade: {symbol:5s} {idx} {tag}')
+                return True
+        return False
+
     def apply_trade(row, tag):
-        if in_trade(row.name, trades): return None
+        overlap = 0
+        if in_trade(row.name, tag):
+            params['trade_overlap'] += 1
+            overlap = 1
         iloc = df.index.get_loc(row.name)
         buy_day = df.iloc[iloc+1]
         sell_stop = None
@@ -86,22 +97,22 @@ def rsi_momo_strategy(symbol, df, params):
                 break
         pct_return = sell_day.open / buy_day.open - 1
         days_open = j
-        data = [symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, \
+        data = [symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, overlap, \
                        params['id'], j, tag, buy_day.rsi, buy_day.sma, buy_day.atr, buy_day.roc, buy_day.adx]
         trades.append(data)
         all_trades.append(data)
 
     # RSI xUnder
-    trades = []
-    signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.shift(1).rsi < params['rsi_entry']) & (df.index < cutoff)]
+    df = setup(10)
+    signals = df.loc[(df.close > df.sma) & (df.rsi < params['rsi_entry']) & (df.shift(1).rsi > params['rsi_entry']) & (df.index < cutoff)]
     signals.apply(lambda row: apply_trade(row, 'rsi_xunder'), axis=1)
 
     # RSI xOver
-    trades = []
+    df = setup(14)
     signals = df.loc[(df.close > df.sma) & (df.rsi > params['rsi_entry']) & (df.shift(1).rsi < params['rsi_entry']) & (df.index < cutoff)]
     signals.apply(lambda row: apply_trade(row, 'rsi_xover'), axis=1)
 
-    df = pd.DataFrame(all_trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', \
+    df = pd.DataFrame(all_trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', 'overlap', \
         'param_id', 'days_open', 'strategy', 'rsi', 'sma', 'atr', 'roc', 'adx'])
     return df
 
@@ -112,22 +123,33 @@ def myRSI(symbol):
 def flatten(t):
     return [item for sublist in t for item in sublist]
 
+def yf_df_normalize(symbol, df):
+    #if 'date' in df: 
+    #    df.drop('date',axis=1, inplace=True)
+    df.reset_index(inplace=True)
+    df.columns = df.columns.str.lower()
+
+    if df.index.dtype == np.int64 and df.date.dtype == 'O':
+        df.date = pd.to_datetime(df.date).dt.normalize()
+    df.set_index('date', inplace=True)
+    if 'adj close' in df: 
+        df['close'] = df['adj close']
+        df.drop('adj close',axis=1, inplace=True)
+    df.symbol = symbol
+    return df
+
 def load_symbol(symbol):
     file = f"datasets/{symbol}.csv.gz"
     if os.path.isfile(file):
-        #df = pd.read_csv(file, index_col='Date', parse_dates=True)
-        df = pd.read_csv(file, parse_dates=True)
-        df.rename(columns={'Date': 'date'},inplace=True)
+        #df = pd.read_csv(file, index_col=0, parse_dates=True)
+        df = pd.read_csv(file)
+        df = yf_df_normalize(symbol, df)
     else:
         period = '3mo'
         df = yf.download(symbol, progress=False, start='2005-01-01')
-        df.reset_index(inplace=True)
-        df.columns = df.columns.str.lower()
-        if 'adj close' in df: df.drop('adj close',axis=1, inplace=True)
-        df.set_index('date', inplace=True)
+        df = yf_df_normalize(symbol, df)
         df.to_csv(file,index=True)
-    if 'adj close' in df: df.drop('adj close',axis=1, inplace=True)
-    df.index = df.date.dt.normalize()
+
     df.symbol = symbol
     if OPTS['df_start_on']: df = df[df.index >= OPTS['df_start_on']]
     if OPTS['df_end_on']: df = df[df.index <= OPTS['df_end_on']]
@@ -158,24 +180,24 @@ def uberdf_load_all(filename):
     return frames
 
 def uberdf_one_config(udf, params):
-    print(f'uberdf_one_config: params={params}')
+    #print(f'uberdf_one_config: params={params}')
     start = time.time()    
     frames = []
+    params['trade_overlap'] = 0
     for symbol, df in udf.items():
         df = rsi_momo_strategy(symbol, df, params)
         if len(df) > 0:
             frames.append(df)
-    if len(frames) == 0:
-        return
+    params['trades'] = 0
+    if len(frames) > 0:
+        df = pd.concat(frames)
+        for k, v in params.items():
+            df[k] = v                            
+        filename=f'results/trades.{params["id"]}.csv.gz'
+        df.to_csv(filename,index=False)
+        params['results'] = filename
+        params['trades'] = len(df)
 
-    df = pd.concat(frames)
-    for k, v in params.items():
-        df[k] = v                            
-    filename=f'results/trades.{params["id"]}.csv.gz'
-    print(f'uberdf_one_config: write df={filename}')
-    df.to_csv(filename,index=False)
-
-    params['trades'] = len(df)
     print(f'uberdf_one_config: results={params}')
     return df
 
@@ -194,7 +216,7 @@ def uberdf_shard(shard_id=None,shard_max=None):
 OPTS = {
     'is_test': False,
     'df_start_on': '2007-01-01',
-    'df_end_on': '2021-06-01',
+    'df_end_on': '2021-07-01',
 }
 XOPTS = {
     'is_test': True,

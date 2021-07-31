@@ -46,6 +46,11 @@ def process_trades():
     df['pct_sma'] = df.sma / df.bprice - 1
     df['pct_atr'] = df.atr / df.bprice
     df.to_csv('trades.csv',index=False)
+
+#     with pd.ExcelWriter('trades.xlsx') as writer:
+#         df.to_excel(writer, sheet_name='raw')
+    df.to_excel('trades.xlsx')
+    
     return df
 
 df = process_trades()

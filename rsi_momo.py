@@ -11,61 +11,40 @@ import matplotlib.pyplot as plt
 import os
 pd.options.mode.chained_assignment = None
 
-# For the small ticker list of ETFs, these look optimal 35,45,160,0,12
-def enumerate_params():
-    keys = ['rsi_entry', 'rsi_exit', 'sma_period', 'stop_loss_pct', 'max_trade_days']
-    params =  []
-    i = 1
-    for rsi_entry in range(15,36,5):
-        for rsi_exit in range(20,46,5):
-            if rsi_exit <= rsi_entry: continue
-            for sma_period in range(50,201,50):
-                for stop_loss_pct in [0, 5, 10]:
-                    for max_trade_days in [2, 4, 8, 16]:
-                        param = dict(zip(keys, [rsi_entry, rsi_exit, sma_period, stop_loss_pct, max_trade_days
-                ]))
-                        i += 1
-                        param['id'] = i
-                        params.append(param)
-    if OPTS['is_test']:
-        params = random.sample(params,10)
-        print(f'enumerate_params: test enabled params len={len(params)}')
-    return params
-
-def enumerate_params_products():
-    keys = ['rsi_entry', 'rsi_exit', 'sma_period', 'stop_loss_pct', 'max_trade_days']
-    params =  []
-    r_rsi_entry = list(range(15,31,5))
-    r_rsi_exit = list(range(35,46,5))
-    r_sma_period = list(range(100,201,20))
-    r_stop_loss_pct = list(range(0,9,2))
-    r_max_trade_days = list(range(4,17,2))
-    list(itertools.product(r_rsi_entry,r_rsi_exit, r_sma_period, r_stop_loss_pct, r_max_trade_days))
-    return params
-
-def rsi_momo_strategy(symbol, df_in, params):
-    #print(f'rsi_momo_strategy: {symbol} {params}')
-    stop_loss_pct = params['stop_loss_pct']
+def uberdf_enrich(udf, params):
+    for h in params:
+        i = h['sma_period']
+        h[i] = 1
+    sma_periods = np.unique([h['sma_period'] for h in params])
     
-    all_trades = []
-    trades = []
-    df = None
-    def setup(rsi_period):
-        trades = []
-        df = df_in.copy()
-        #df['rsi'] = df.ta.rsi()
-        #df['sma'] = df.ta.sma(params['sma_period'])
-        df['rsi'] = ta.momentum.rsi(df.close,window=10)
-        df['sma'] = ta.trend.sma_indicator(df.close, window=params['sma_period'])
+    for symbol, df in udf.items():
+        df['rsi10'] = ta.momentum.rsi(df.close,window=10)
+        df['rsi14'] = ta.momentum.rsi(df.close,window=14)
+        for i in sma_periods:
+            df['sma'+str(i)] = ta.trend.sma_indicator(df.close, window=i)
+        df['sma20'] = ta.trend.sma_indicator(df.close, window=20)
         df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
         df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
         #df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
         df['adx'] = 0
         df.dropna(inplace=True)
+    
+
+def rsi_momo_strategy(symbol, df, params):
+    #print(f'rsi_momo_strategy: {symbol} {params}')
+    stop_loss_pct = params['stop_loss_pct']
+    if 'trade_overlap' not in params:
+        params['trade_overlap'] = 0
+    all_trades = []
+    trades = []
+    def setup(rsi_period):
+        trades = []
+        df['rsi'] = df['rsi' + str(rsi_period)]
+        df['sma'] = df['sma' + str(params['sma_period'])]
         return df
 
     # The DF is daily, and therefor has no weekends and timedelta is not needed.
-    cutoff = df_in.tail(params['max_trade_days']+1).index.min()
+    cutoff = df.tail(params['max_trade_days']+1).index.min()
 
     def in_trade(idx, tag):
         for t in trades:
@@ -98,7 +77,7 @@ def rsi_momo_strategy(symbol, df_in, params):
         pct_return = sell_day.open / buy_day.open - 1
         days_open = j
         data = [symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, overlap, \
-                       params['id'], j, tag, buy_day.rsi, buy_day.sma, buy_day.atr, buy_day.roc, buy_day.adx]
+                       params['id'], j, tag, buy_day.rsi, buy_day.sma, buy_day.sma20, buy_day.atr, buy_day.roc, buy_day.adx]
         trades.append(data)
         all_trades.append(data)
 
@@ -113,12 +92,40 @@ def rsi_momo_strategy(symbol, df_in, params):
     signals.apply(lambda row: apply_trade(row, 'rsi_xover'), axis=1)
 
     df = pd.DataFrame(all_trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', 'overlap', \
-        'param_id', 'days_open', 'strategy', 'rsi', 'sma', 'atr', 'roc', 'adx'])
+        'param_id', 'days_open', 'strategy', 'rsi', 'sma', 'sma20', 'atr', 'roc', 'adx'])
     return df
 
-def myRSI(symbol):
-    df['Upmove'] = df['price_change'].apply(lambda x: x if x > 0 else 0)
-    df['avg_down'] = df.Downmove.ewm(span=19).mean()
+# For the small ticker list of ETFs, these look optimal 35,45,160,0,12
+def enumerate_params():
+    keys = ['rsi_entry', 'rsi_exit', 'sma_period', 'stop_loss_pct', 'max_trade_days']
+    params =  []
+    i = 1
+    for rsi_entry in range(15,36,5):
+        for rsi_exit in range(20,46,5):
+            if rsi_exit <= rsi_entry: continue
+            for sma_period in range(50,201,50):
+                for stop_loss_pct in [0, 5, 10]:
+                    for max_trade_days in [2, 4, 8, 16]:
+                        param = dict(zip(keys, [rsi_entry, rsi_exit, sma_period, stop_loss_pct, max_trade_days
+                ]))
+                        i += 1
+                        param['id'] = i
+                        params.append(param)
+    if OPTS['is_test']:
+        params = random.sample(params,10)
+        print(f'enumerate_params: test enabled params len={len(params)}')
+    return params
+
+def enumerate_params_products():
+    keys = ['rsi_entry', 'rsi_exit', 'sma_period', 'stop_loss_pct', 'max_trade_days']
+    params =  []
+    r_rsi_entry = list(range(15,31,5))
+    r_rsi_exit = list(range(35,46,5))
+    r_sma_period = list(range(100,201,20))
+    r_stop_loss_pct = list(range(0,9,2))
+    r_max_trade_days = list(range(4,17,2))
+    list(itertools.product(r_rsi_entry,r_rsi_exit, r_sma_period, r_stop_loss_pct, r_max_trade_days))
+    return params
 
 def flatten(t):
     return [item for sublist in t for item in sublist]
@@ -138,17 +145,19 @@ def yf_df_normalize(symbol, df):
     df.symbol = symbol
     return df
 
+# Return empty dataframe when symbol file is not found
 def load_symbol(symbol):
     file = f"datasets/{symbol}.csv.gz"
+    if not os.path.isfile(file):
+        return pd.DataFrame()
+        df = yf.download(symbol, progress=False, start='2005-01-01')
+        df = yf_df_normalize(symbol, df)
+        df.to_csv(file,index=True)
+
     if os.path.isfile(file):
         #df = pd.read_csv(file, index_col=0, parse_dates=True)
         df = pd.read_csv(file)
         df = yf_df_normalize(symbol, df)
-    else:
-        period = '3mo'
-        df = yf.download(symbol, progress=False, start='2005-01-01')
-        df = yf_df_normalize(symbol, df)
-        df.to_csv(file,index=True)
 
     df.symbol = symbol
     if OPTS['df_start_on']: df = df[df.index >= OPTS['df_start_on']]
@@ -183,7 +192,6 @@ def uberdf_one_config(udf, params):
     #print(f'uberdf_one_config: params={params}')
     start = time.time()    
     frames = []
-    params['trade_overlap'] = 0
     for symbol, df in udf.items():
         df = rsi_momo_strategy(symbol, df, params)
         if len(df) > 0:
@@ -205,6 +213,7 @@ def uberdf_shard(shard_id=None,shard_max=None):
     print(f'uberdf_shard: id={shard_id} shard_max={shard_max}')
     start = time.time()
     configs = enumerate_params()
+    uberdf_enrich(udf, configs)
     for params in configs:
         i = params['id']
         if i % shard_max != shard_id: continue
@@ -218,7 +227,7 @@ OPTS = {
     'df_start_on': '2007-01-01',
     'df_end_on': '2021-07-01',
 }
-XOPTS = {
+#OPTS = {
     'is_test': True,
     'df_start_on': '2016-01-01',
     'df_end_on': '2021-01-01',

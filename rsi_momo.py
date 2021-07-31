@@ -115,17 +115,20 @@ def flatten(t):
 def load_symbol(symbol):
     file = f"datasets/{symbol}.csv.gz"
     if os.path.isfile(file):
-        df = pd.read_csv(file, index_col='Date', parse_dates=True)
+        #df = pd.read_csv(file, index_col='Date', parse_dates=True)
+        df = pd.read_csv(file, parse_dates=True)
+        df.rename(columns={'Date': 'date'},inplace=True)
     else:
         period = '3mo'
         df = yf.download(symbol, progress=False, start='2005-01-01')
         df.reset_index(inplace=True)
         df.columns = df.columns.str.lower()
+        if 'adj close' in df: df.drop('adj close',axis=1, inplace=True)
         df.set_index('date', inplace=True)
-        df.symbol = symbol       
         df.to_csv(file,index=True)
-    df['symbol'] = symbol
-    df.name = symbol
+    if 'adj close' in df: df.drop('adj close',axis=1, inplace=True)
+    df.index = df.date.dt.normalize()
+    df.symbol = symbol
     if OPTS['df_start_on']: df = df[df.index >= OPTS['df_start_on']]
     if OPTS['df_end_on']: df = df[df.index <= OPTS['df_end_on']]
     return df

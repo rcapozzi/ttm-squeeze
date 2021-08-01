@@ -49,8 +49,10 @@ def process_trades():
 
 #     with pd.ExcelWriter('trades.xlsx') as writer:
 #         df.to_excel(writer, sheet_name='raw')
-    df.to_excel('trades.xlsx')
-    
+    #df.to_excel('trades.xlsx')
+    sample = df.sample(300_000)
+    sample.to_excel('trades.xlsx')
+    # df[(df.bdate >= '2021-04-01') & (df.rsi_entry == 15) & (df.rsi_exit == 45) & (df.stop_loss_pct == 10) & (df.sma_period == 150) & (df.max_trade_days == 8)]
     return df
 
 df = process_trades()

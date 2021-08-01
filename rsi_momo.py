@@ -3,61 +3,34 @@ import time
 import datetime as dt
 import numpy as np
 import pandas as pd
-import random
 #import pandas_ta as ta
+import random
 import ta
 import yfinance as yf
 import matplotlib.pyplot as plt
 import os
 pd.options.mode.chained_assignment = None
 
-def uberdf_enrich(udf, params):
-    for h in params:
-        i = h['sma_period']
-        h[i] = 1
-    sma_periods = np.unique([h['sma_period'] for h in params])
-    
-    for symbol, df in udf.items():
-        df['rsi10'] = ta.momentum.rsi(df.close,window=10)
-        df['rsi14'] = ta.momentum.rsi(df.close,window=14)
-        for i in sma_periods:
-            df['sma'+str(i)] = ta.trend.sma_indicator(df.close, window=i)
-        df['sma20'] = ta.trend.sma_indicator(df.close, window=20)
-        df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
-        df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
-        #df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
-        df['adx'] = 0
-        df.dropna(inplace=True)
-    
-
 def rsi_momo_strategy(symbol, df, params):
     #print(f'rsi_momo_strategy: {symbol} {params}')
-    stop_loss_pct = params['stop_loss_pct']
     if 'trade_overlap' not in params:
         params['trade_overlap'] = 0
     all_trades = []
-    trades = []
+    last_trade_dt = None
+    # The DF is daily, and therefor has no weekends and timedelta is not needed.
+    # cutoff = df.tail(params['max_trade_days']+1).index.min()
+    cutoff = df.iloc[-25].name
+
     def setup(rsi_period):
-        trades = []
+        nonlocal last_trade_dt
+        last_trade_dt = None
         df['rsi'] = df['rsi' + str(rsi_period)]
         df['sma'] = df['sma' + str(params['sma_period'])]
         return df
 
-    # The DF is daily, and therefor has no weekends and timedelta is not needed.
-    cutoff = df.tail(params['max_trade_days']+1).index.min()
-
-    def in_trade(idx, tag):
-        for t in trades:
-            if t[1] <= idx and t[3] > idx:
-                #print(f'in_trade: {symbol:5s} {idx} {tag}')
-                return True
-        return False
-
     def apply_trade(row, tag):
+        nonlocal last_trade_dt
         overlap = 0
-        if in_trade(row.name, tag):
-            params['trade_overlap'] += 1
-            overlap = 1
         iloc = df.index.get_loc(row.name)
         buy_day = df.iloc[iloc+1]
         sell_stop = None
@@ -74,11 +47,15 @@ def rsi_momo_strategy(symbol, df, params):
             if sell_stop and this_day.low < sell_stop:
                 sell_descr = 'stop_loss'
                 break
+        if (last_trade_dt and buy_day.name <= last_trade_dt):
+            #print(f'd0={buy_day.name} d1={last_trade_dt} ?={buy_day.name <= last_trade_dt} overlap={overlap}')
+            params['trade_overlap'] += 1
+            overlap += 1
+        last_trade_dt = sell_day.name
         pct_return = sell_day.open / buy_day.open - 1
         days_open = j
         data = [symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, overlap, \
                        params['id'], j, tag, buy_day.rsi, buy_day.sma, buy_day.sma20, buy_day.atr, buy_day.roc, buy_day.adx]
-        trades.append(data)
         all_trades.append(data)
 
     # RSI xUnder
@@ -129,6 +106,21 @@ def enumerate_params_products():
 
 def flatten(t):
     return [item for sublist in t for item in sublist]
+
+def uberdf_enrich(udf, params):
+    sma_periods = np.unique([h['sma_period'] for h in params])
+    
+    for symbol, df in udf.items():
+        df['rsi10'] = ta.momentum.rsi(df.close,window=10)
+        df['rsi14'] = ta.momentum.rsi(df.close,window=14)
+        for i in sma_periods:
+            df['sma'+str(i)] = ta.trend.sma_indicator(df.close, window=i)
+        df['sma20'] = ta.trend.sma_indicator(df.close, window=20)
+        df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
+        df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
+        #df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
+        df['adx'] = 0
+        df.dropna(inplace=True)
 
 def yf_df_normalize(symbol, df):
     #if 'date' in df: 
@@ -227,7 +219,7 @@ OPTS = {
     'df_start_on': '2007-01-01',
     'df_end_on': '2021-07-01',
 }
-#OPTS = {
+XOPTS = {
     'is_test': True,
     'df_start_on': '2016-01-01',
     'df_end_on': '2021-01-01',

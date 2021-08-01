@@ -6,7 +6,7 @@
 rm -fr results
 mkdir -p results
 t0=`date`
-seq -w 1 64 | xargs -I X -P 6 sh -c 'python3 ./rsi_momo.py ./sp500.csv $1 64 > results/rsi_momo.$1.out' -- X
+seq -w 1 64 | xargs -I X -P 4 sh -c 'python3 ./rsi_momo.py ./sp500.csv $1 64 > results/rsi_momo.$1.out' -- X
 t1=`date`
 python3 ./process_results.py
 t2=`date`

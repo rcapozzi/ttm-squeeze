@@ -1,6 +1,7 @@
 pandas
+pandas-datareader
+pandas_market_calendars
 plotly
+requests_cache
 yfinance
 ta
-pandas_market_calendars
-

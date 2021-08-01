@@ -7,3 +7,6 @@ https://www.youtube.com/watch?v=YhkNoOqYp9A
 
 snapshot.py
 * Make this multi-threads. The YF download is multi-threaded, but you'd need to batch the symbols and you need to figure out the min start for that batch.
+
+# PCA
+https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html

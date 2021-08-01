@@ -7,6 +7,14 @@ import pandas as pd
 import pandas_market_calendars as mcal
 import yfinance as yf
 
+import requests_cache
+# session = requests_cache.CachedSession('yfinance.cache')
+# session.headers['User-agent'] = 'my-program/1.0'
+# ticker = yf.Ticker('msft aapl goog', session=session)
+# # The scraped response will be stored in the cache
+# ticker.actions
+
+
 def junk():
     with open('symbols.csv') as f:
         lines = f.read().splitlines()

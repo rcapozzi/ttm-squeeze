@@ -81,10 +81,9 @@ def enumerate_params():
         for rsi_exit in range(20,46,5):
             if rsi_exit <= rsi_entry: continue
             for sma_period in range(50,201,50):
-                for stop_loss_pct in [0, 5, 10]:
+                for stop_loss_pct in [10]: # , 5, 10]:
                     for max_trade_days in [2, 4, 8, 16]:
-                        param = dict(zip(keys, [rsi_entry, rsi_exit, sma_period, stop_loss_pct, max_trade_days
-                ]))
+                        param = dict(zip(keys, [rsi_entry, rsi_exit, sma_period, stop_loss_pct, max_trade_days ]))
                         i += 1
                         param['id'] = i
                         params.append(param)

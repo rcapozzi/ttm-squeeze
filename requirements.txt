@@ -1,3 +1,5 @@
+matplotlib
+numpy
 pandas
 pandas-datareader
 pandas_market_calendars

@@ -49,6 +49,7 @@ def enrich_add_ta(df):
     df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
         #df['adx'] = 0
 
+#    for k, v in symbols.items(): v['symbol'] = k
 def enrich_get_symbol(symbol,symbols):
     if symbol in symbols:
         return symbols[symbol]
@@ -57,19 +58,35 @@ def enrich_get_symbol(symbol,symbols):
     print(f'INFO: enrich_get_symbol current_size={len(symbols)} loading={filename}')
     df = pd.read_csv(filename, index_col='date', parse_dates=True)
     enrich_add_ta(df)
-    symbols[symbol] = df
+    symbols[symbol] = 1
+    #symbols[symbol] = df
+    # UDF
+    df['symbol'] = symbol
+    if "___" in symbols:
+        udf = symbols["___"]
+        udf = pd.concat([udf, df])
+    else:
+        udf = df    
+    symbols["___"] = udf
     return df
 
-def enrich_df_i(row,symbols):
-    data = enrich_get_symbol(row.symbol, symbols)
-    data = data.loc[row.bdate]
-    # We don't want to call data.columns.to_list() for every trade
-    for i in ['rsi10', 'rsi14', 'pct_sma10', 'pct_sma20', 'pct_sma50', 'pct_sma100', 'pct_sma200', 'pct_atr', 'roc', 'adx']:
-        row[i] = data[i]
-    return None
+# def enrich_df_i(row,symbols):
+#     data = enrich_get_symbol(row.symbol, symbols)
+#     data = data.loc[row.bdate]
+#     # We don't want to call data.columns.to_list() for every trade
+#     for i in ['rsi10', 'rsi14', 'pct_sma10', 'pct_sma20', 'pct_sma50', 'pct_sma100', 'pct_sma200', 'pct_atr', 'roc', 'adx']:
+#         row[i] = data[i]
+#     return None
 
-def enrich_df(df):
-    df.apply(lambda row: enrich_df_i(row, symbols), axis=1)
+def enrich_df(df, symbols):
+    # Row by row
+    # df.apply(lambda row: enrich_df_i(row, symbols), axis=1)
+    # UDF
+    df['bdate'] = pd.to_datetime(df.bdate)
+    # Ensure symbols are loaded
+    for e in df.symbol.unique(): enrich_get_symbol(e, symbols)
+    udf = symbols["___"]
+    df = pd.merge(left=df, right=udf, left_on=['symbol', 'bdate'], right_on=['symbol','date'])
     return df
 
 def process_trades():
@@ -78,7 +95,7 @@ def process_trades():
     for filename in glob.glob('results/*.csv.gz'):
         df = pd.read_csv(filename)
         if len(df) == 0: continue
-        enrich_df(df)
+        enrich_df(df, symbols)
         if CSV_APPEND:
             df.to_csv('trades.csv', index=False, mode='a')    
         else:
@@ -100,7 +117,7 @@ def process_trades():
 
 if __name__ == "__main__":
     symbols = {}
-    symbol_file = sys.argv[1]
+    #symbol_file = sys.argv[1]
     df = process_trades()
 
 #v = ','.join(keys)

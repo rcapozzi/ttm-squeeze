@@ -55,7 +55,7 @@ def rsi_momo_strategy(symbol, df, params):
         pct_return = sell_day.open / buy_day.open - 1
         days_open = j
         data = [symbol, buy_day.name, buy_day.open, sell_day.name, sell_day.open, pct_return, sell_descr, overlap, \
-                       params['id'], j, tag, buy_day.rsi, buy_day.sma, buy_day.sma20, buy_day.atr, buy_day.roc, buy_day.adx]
+                       params['id'], j, tag]
         all_trades.append(data)
 
     # RSI xUnder
@@ -69,7 +69,7 @@ def rsi_momo_strategy(symbol, df, params):
     signals.apply(lambda row: apply_trade(row, 'rsi_xover'), axis=1)
 
     df = pd.DataFrame(all_trades, columns=['symbol', 'bdate', 'bprice', 'sdate', 'sprice', 'pct_return', 'sell_descr', 'overlap', \
-        'param_id', 'days_open', 'strategy', 'rsi', 'sma', 'sma20', 'atr', 'roc', 'adx'])
+            'param_id', 'days_open', 'strategy'])
     return df
 
 # For the small ticker list of ETFs, these look optimal 35,45,160,0,12
@@ -114,11 +114,11 @@ def uberdf_enrich(udf, params):
         df['rsi14'] = ta.momentum.rsi(df.close,window=14)
         for i in sma_periods:
             df['sma'+str(i)] = ta.trend.sma_indicator(df.close, window=i)
-        df['sma20'] = ta.trend.sma_indicator(df.close, window=20)
-        df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
-        df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
+        #df['sma20'] = ta.trend.sma_indicator(df.close, window=20)
+        #df['atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() 
+        #df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
         #df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
-        df['adx'] = 0
+        #df['adx'] = 0
         df.dropna(inplace=True)
 
 def yf_df_normalize(symbol, df):
@@ -192,7 +192,7 @@ def uberdf_one_config(udf, params):
         df = pd.concat(frames)
         for k, v in params.items():
             df[k] = v                            
-        filename=f'results/trades.{params["id"]}.csv.gz'
+        filename=f'results/trades.{params["id"]:04d}.csv.gz'
         df.to_csv(filename,index=False)
         params['results'] = filename
         params['trades'] = len(df)
@@ -218,7 +218,7 @@ OPTS = {
     'df_start_on': '2007-01-01',
     'df_end_on': '2021-07-01',
 }
-XOPTS = {
+OPTS = {
     'is_test': True,
     'df_start_on': '2016-01-01',
     'df_end_on': '2021-01-01',

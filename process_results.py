@@ -1,8 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os
-import sys
-import re
 import pandas as pd
+import re
+import sys
+import ta
+import glob
 
 keys = ['rsi_entry',
  'rsi_exit',
@@ -17,6 +19,7 @@ keys = ['rsi_entry',
  'mean',
  'std',
  'sum']
+
 
 def process_results_file(file):
     p = re.compile('(uberdf_one_config: results=)(.*)')
@@ -35,16 +38,56 @@ def process_results_file(file):
         v = ','.join(v)
         print(v)
 
-import glob
+def enrich_add_ta(df):
+    df['rsi10'] = ta.momentum.rsi(df.close,window=10)
+    df['rsi14'] = ta.momentum.rsi(df.close,window=14)
+    for i in [10, 20, 50, 100, 200]:
+        s = ta.trend.sma_indicator(df.close, window=i)
+        df['pct_sma'+str(i)] = s / df.close - 1
+    df['pct_atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() / df.close 
+    df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
+    df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
+        #df['adx'] = 0
+
+def enrich_get_symbol(symbol,symbols):
+    if symbol in symbols:
+        return symbols[symbol]
+    # Gotta load it
+    filename = f'datasets/{symbol}.csv.gz'
+    print(f'INFO: enrich_get_symbol current_size={len(symbols)} loading={filename}')
+    df = pd.read_csv(filename, index_col='date', parse_dates=True)
+    enrich_add_ta(df)
+    symbols[symbol] = df
+    return df
+
+def enrich_df_i(row,symbols):
+    data = enrich_get_symbol(row.symbol, symbols)
+    data = data.loc[row.bdate]
+    # We don't want to call data.columns.to_list() for every trade
+    for i in ['rsi10', 'rsi14', 'pct_sma10', 'pct_sma20', 'pct_sma50', 'pct_sma100', 'pct_sma200', 'pct_atr', 'roc', 'adx']:
+        row[i] = data[i]
+    return None
+
+def enrich_df(df):
+    df.apply(lambda row: enrich_df_i(row, symbols), axis=1)
+    return df
+
 def process_trades():
+    CSV_APPEND = False
     ary = []
     for filename in glob.glob('results/*.csv.gz'):
         df = pd.read_csv(filename)
         if len(df) == 0: continue
-        ary.append(df)
+        enrich_df(df)
+        if CSV_APPEND:
+            df.to_csv('trades.csv', index=False, mode='a')    
+        else:
+            ary.append(df)
+        print(f'INFO: processed={filename}')
+
+    print(f'INFO: running concat')
     df = pd.concat(ary)
-    df['pct_sma'] = df.sma / df.bprice - 1
-    df['pct_atr'] = df.atr / df.bprice
+    print(f'INFO: writing trades.csv')
     df.to_csv('trades.csv',index=False)
 
 #     with pd.ExcelWriter('trades.xlsx') as writer:
@@ -55,7 +98,10 @@ def process_trades():
     # df[(df.bdate >= '2021-04-01') & (df.rsi_entry == 15) & (df.rsi_exit == 45) & (df.stop_loss_pct == 10) & (df.sma_period == 150) & (df.max_trade_days == 8)]
     return df
 
-df = process_trades()
+if __name__ == "__main__":
+    symbols = {}
+    symbol_file = sys.argv[1]
+    df = process_trades()
 
 #v = ','.join(keys)
 #print("#" + v)

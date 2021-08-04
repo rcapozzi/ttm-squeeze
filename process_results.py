@@ -43,10 +43,13 @@ def enrich_add_ta(df):
     df['rsi14'] = ta.momentum.rsi(df.close,window=14)
     for i in [10, 20, 50, 100, 200]:
         s = ta.trend.sma_indicator(df.close, window=i)
-        df['pct_sma'+str(i)] = s / df.close - 1
-    df['pct_atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() / df.close 
+        df['p_sma'+str(i)] = s / df.close - 1
+    df['p_atr'] = ta.volatility.AverageTrueRange(df.high, df.low, df.close).average_true_range() / df.close 
     df['roc'] = ta.momentum.ROCIndicator(df.close).roc() 
     df['adx'] = ta.trend.ADXIndicator(df.high, df.low, df.close, 14, True).adx() 
+    
+    for i in [4, 8, 12]:
+        df['p_ret' + str(i)] = (1 + df.close.pct_change()).rolling(window=i).apply(np.prod,raw=True) - 1
         #df['adx'] = 0
 
 #    for k, v in symbols.items(): v['symbol'] = k

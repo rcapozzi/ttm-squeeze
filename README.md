@@ -10,3 +10,20 @@ snapshot.py
 
 # PCA
 https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html
+
+
+# All about calculating returns
+(1+pct_change).cumprod() - 1
+
+```(1+df.value).rolling(window=X).agg(np.prod) - 1```
+Faster
+```(1 + df.value).rolling(window=X).apply(np.prod, raw=True) - 1```
+
+The two series have the same total return:
+1, 1, 1, 1, 2
+1, 2, 3, 4, 2
+
+# Data sources
+https://www.alphavantage.co/#about
+https://rapidapi.com/twelvedata/api/twelve-data1/details
+https://iexcloud.io/cloud-cache/

@@ -15,6 +15,17 @@ import requests_cache
 # ticker.actions
 
 
+def sqlite_import(pattern):
+    engine = sqlalchemy.create_engine('sqlite:///datasets/pricing.sqlite')
+    p = re.compile('datasets/(.*?)\.')
+    #for filename in glob.glob('datasets/*.csv.gz'):
+    for filename in glob.glob(pattern):
+        m = p.match(filename)
+        if not m: continue
+        symbol = m.group(1)
+        pd.read_csv(f'datasets/{symbol}.csv.gz').to_sql(symbol, engine, index=False)
+        print(f'INFO: Imported {symbol}')
+
 def junk():
     with open('symbols.csv') as f:
         lines = f.read().splitlines()

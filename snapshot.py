@@ -41,29 +41,19 @@ def junk():
         data.to_csv(file)
 
 
-def yf_df_normalize(symbol, df):
+def yf_df_normalize(df):
     df.reset_index(inplace=True)
     df.columns = df.columns.str.lower()
     df.set_index('date', inplace=True)
     df.index = pd.to_datetime(df.index).normalize()
     if 'adj close' in df: df.drop('adj close',axis=1, inplace=True)
     if 'index' in df: df.drop('index',axis=1, inplace=True)
-    df.symbol = symbol
     return df
 
-def yf_df_update(symbol, filename):
-    print(f'symbol={symbol:5s} reading...')
-    df = pd.read_csv(filename, parse_dates=True)
-    if len(df) == 0:
-        print(f'symbol={symbol:5s} removing empty file')
-        os.remove(filename)
-        return None
-    if df.shape[1] > 10:
-        print(f'symbol={symbol:5s} Wrong shape')
-        return None
-    df = yf_df_normalize(symbol, df)
+def yf_df_update(df):
+    if df is None: return None
+    if not df.symbol: return None
     
-    symbol = df.symbol
     last_ts = df.iloc[-1].name
     nyse = mcal.get_calendar('NYSE')
     schedule = nyse.schedule(start_date=last_ts, end_date=last_ts)
@@ -75,26 +65,48 @@ def yf_df_update(symbol, filename):
     schedule = nyse.schedule(start_date=now_ts - dt.timedelta(days=5), end_date=now_ts)[-1:]
     last_market_close_ts = nyse.schedule(start_date=now_ts - dt.timedelta(days=5), end_date=now_ts).market_close.iloc[-1]
 
+    # During the market session, next_close_ts is next day
     if next_close_ts >= last_market_close_ts:
-        return False
+        return None
     # TODO: How does this handle weekends and mid day
     # end is not included
-    print(f'symbol={symbol:5s} from={next_close_ts}')
-    delta_df = yf.download(symbol, progress=False, start=next_close_ts.strftime('%Y-%m-%d'))
-    delta_df = yf_df_normalize(symbol, delta_df)
+    print(f'symbol={df.symbol:5s} from={next_close_ts}')
+    delta_df = yf.download(df.symbol, progress=False, start=next_close_ts.strftime('%Y-%m-%d'))
+    delta_df.symbol = df.symbol
+    delta_df = yf_df_normalize(delta_df)
     
+    tmp = df.symbol
     df = df.append(delta_df)
+    df.symbol = tmp
+    return df
+
+def yf_df_validate(p, filename):
+    print(f'filename={filename} Validting')
+    m = p.match(filename)
+    if not m: return None
+    symbol = m.group(1)
+    df = pd.read_csv(filename, parse_dates=True)
+    if len(df) == 0:
+        print(f'filename={filename} symbol={symbol:5s} Empty')
+        os.remove(filename)
+        return None
+    if df.shape[1] > 10:
+        print(f'filename={filename} symbol={symbol:5s} Bad shape')
+        return None
     df.symbol = symbol
-    df.to_csv(filename, index=True)
     return df
 
 def update_datasets():
+    i = 0
     p = re.compile('datasets/(.*?)\.')
     for filename in glob.glob('datasets/*.csv.gz'):
-        m = p.match(filename)
-        if not m: continue
-        symbol = m.group(1)
-        df = yf_df_update(symbol, filename)
+        df = yf_df_validate(p, filename)
+        if df is not None: df = yf_df_normalize(df)
+        if df is not None: df = yf_df_update(df)
+        if df and df is not None: df.to_csv(filename, index=True)
+        i += 1
+        if i > 3:
+            return None
 
 update_datasets()
 

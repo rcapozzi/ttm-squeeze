@@ -107,8 +107,12 @@ def yf_df_validate(p, filename):
     return df
 
 def update_datasets():
+    i = 0
     p = re.compile('datasets/(.*?)\.')
     for filename in glob.glob('datasets/*.csv.gz'):
+        i += 1
+        if i > 5:
+            return
         df = yf_df_validate(p, filename)
         if df is not None: df = yf_df_normalize(df)
         if df is not None: yf_df_update(df)

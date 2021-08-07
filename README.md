@@ -13,6 +13,9 @@ https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-an
 
 
 # All about calculating returns
+
+For daily, log returns, use df['log_returns'].cumsum().apply(np.exp)
+
 (1+pct_change).cumprod() - 1
 
 ```(1+df.value).rolling(window=X).agg(np.prod) - 1```
@@ -27,3 +30,11 @@ The two series have the same total return:
 https://www.alphavantage.co/#about
 https://rapidapi.com/twelvedata/api/twelve-data1/details
 https://iexcloud.io/cloud-cache/
+
+# 
+backtrader https://algotrading101.com/learn/backtrader-for-backtesting/
+zipline
+
+# Tear sheets
+ quantstats handles a single series of returns
+ Pyfolio Reloaded https://pyfolio.ml4trading.io/index.html

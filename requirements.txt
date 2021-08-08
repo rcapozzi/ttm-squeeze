@@ -6,6 +6,7 @@ pandas_market_calendars
 plotly
 quantstats
 requests_cache
+sklearn
 sqlalchemy
 yfinance
 ta

@@ -27,17 +27,21 @@ def sqlite_import(pattern):
         print(f'INFO: Imported {symbol}')
 
 def junk():
-    with open('symbols.csv') as f:
-        lines = f.read().splitlines()
+    #with open('sp100.csv') as f:
+   #     lines = f.read().splitlines()
+    
     Path("datasets").mkdir(parents=True, exist_ok=True)
     Path("results").mkdir(parents=True, exist_ok=True)
-    for symbol in lines:
+
+    symbols = pd.read_csv('sp100.csv', index_col=0)
+    for symbol in symbols.Symbol:
         file = "datasets/{}.csv.gz".format(symbol)
         if os.path.isfile(file):
             print(f'INFO: skipping {symbol}')
             continue
         print(f'INFO: downloading {symbol}')
         data = yf.download(symbol, start="2005-01-01", progress=False) #, end="2020-08-22")
+        data = yf_df_normalize(data)
         data.to_csv(file)
 
 
@@ -111,11 +115,11 @@ def update_datasets():
     p = re.compile('datasets/(.*?)\.')
     for filename in glob.glob('datasets/*.csv.gz'):
         i += 1
-        if i > 5:
-            return
         df = yf_df_validate(p, filename)
         if df is not None: df = yf_df_normalize(df)
         if df is not None: yf_df_update(df)
+    if i > 5:
+        return
 
 update_datasets()
-
+#junk()

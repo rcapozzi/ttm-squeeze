@@ -54,8 +54,8 @@ def add_labels(df : pd.DataFrame()):
 
     max_high = df.high.rolling(4).max()
     min_low = df.low.rolling(4).min()
-    spread = max_high / min_low - 1
-    df['high_low_spread'] = spread / spread.rolling(20).mean()
+    #spread = max_high / min_low - 1
+    #df['high_low_spread'] = spread / spread.rolling(20).mean()
     
 
     df['BTC'] = np.where(min_low / df.open - 1 < -value, 1, 0)
@@ -67,15 +67,7 @@ def add_labels(df : pd.DataFrame()):
 
     df['BTO'] = np.where( lf_max_high / df.close - 1 > value, 1, 0)
     df['STO'] = np.where( lf_min_low / df.close - 1 < -value, 1, 0)
-
-
-    df['target'] = 'X'
-    df.loc[(df.target == 'X') & (df.is_buy == 1) & (df.is_sell == 1) , 'target'] = 'wipsaw'
-    df.loc[(df.target == 'X') & (df.is_buy == 1), 'target'] = 'buy'
-    df.loc[(df.target == 'X') & (df.is_sell == 1), 'target'] = 'sell'
-    df.loc[(df.target == 'X'), 'target'] = 'hold'
-    del df['is_buy']
-    del df['is_sell']
+    df['target'] = np.where(df.BTO + df.STO == 0, 'hold', 'tbd')
     return None
 
 def drop_crap(df: pd.DataFrame()):
@@ -210,7 +202,7 @@ def process_symbol(symbol):
     df = df[df.index > '2016-01-01'].copy()
     save_df = df.copy()
     
-    df.target = np.where(df.target == 'hold','hold','tbd')
+    df['target'] = np.where(df.BTO + df.STO == 0, 'hold', 'tbd')
     pca, model = model_train(df, features)
     last_row = save_df.iloc[-1][features].values
     expected = model_predict_one(pca, model, last_row)
@@ -219,8 +211,8 @@ def process_symbol(symbol):
     if expected == 'hold': return None
     
     # Train for buy/sell
-    df = save_df.loc[(df.signal == 'buy') | (df.signal == 'sell')].copy()
-    df.target = df.signal
+    df = save_df.loc[(df.BTO == 1) | (df.STO == 1)].copy()   
+    df.target = np.where(df.BTO == 1, 'buy', 'sell')
     
     pca, model = model_train(df, features)
     #last_rows = save_df.iloc[-1:2][features].values
@@ -229,7 +221,9 @@ def process_symbol(symbol):
     a1 = model.__accuracy
     print(f'symbol={symbol:5s} prediction={expected:5s} a0={a0:0.2%} a1={a1:0.2%}')
 
-process_symbol('M')
+##process_symbol('M')
+#import sys
+#sys.exit()
 
 import re
 import glob

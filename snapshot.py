@@ -6,7 +6,7 @@ import re
 import pandas as pd
 import pandas_market_calendars as mcal
 import yfinance as yf
-
+from mylib import market_close_last_next
 import requests_cache
 # session = requests_cache.CachedSession('yfinance.cache')
 # session.headers['User-agent'] = 'my-program/1.0'
@@ -59,24 +59,13 @@ def yf_df_update(df):
     if df is None: return None
     if not df.symbol: return None
     filename = df.filename
-    
-    last_ts = df.iloc[-1].name
-    nyse = mcal.get_calendar('NYSE')
-    schedule = nyse.schedule(start_date=last_ts, end_date=last_ts)
-    last_ts = schedule.loc[last_ts].market_close
-    next_close_ts = last_ts + dt.timedelta(days=1)
 
-    # On weekends, the schedule is an empty DF, So get the last several days and take the last
-    now_ts = pd.Timestamp.utcnow()
-    schedule = nyse.schedule(start_date=now_ts - dt.timedelta(days=5), end_date=now_ts)[-1:]
-    last_market_close_ts = nyse.schedule(start_date=now_ts - dt.timedelta(days=5), end_date=now_ts).market_close.iloc[-1]
-
-    # During the market session, next_close_ts is next day
-    if next_close_ts >= last_market_close_ts:
+    dates = market_close_last_next()
+    if not dates[2] > df.iloc[-1].name:
         print(f'filename={df.filename:<25s} symbol={df.symbol:5s} NOOP')
         return None
-    # TODO: How does this handle weekends and mid day
-    # end is not included
+    
+    next_close_ts = df.iloc[-1].name + dt.timedelta(days=1)
     print(f'filename={filename:<25s} symbol={df.symbol:5s} from={next_close_ts}')
     delta_df = yf.download(df.symbol, progress=False, start=next_close_ts.strftime('%Y-%m-%d'))
     delta_df.symbol = df.symbol

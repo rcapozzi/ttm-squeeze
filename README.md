@@ -38,3 +38,6 @@ zipline
 # Tear sheets
  quantstats handles a single series of returns
  Pyfolio Reloaded https://pyfolio.ml4trading.io/index.html
+
+# TODO
+pycaret see hackernoon

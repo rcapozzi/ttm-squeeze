@@ -42,14 +42,16 @@ def add_features(df :pd.DataFrame):
     df['RSI_FLAG'] = 0.5
     df.loc[(df.RSI_14 > 70), 'RSI_FLAG'] = 1
     df.loc[(df.RSI_14 < 30), 'RSI_FLAG'] = 0
+    
+    df['MACD'] = df.ta.macd().MACDs_12_26_9
 
     return df
 
 # FYI: Rolling includes the current period.
 def add_labels(df : pd.DataFrame()):
     value = 0.05
-    df['is_buy'] = 0
-    df['is_sell'] = 0
+    #df['is_buy'] = 0
+    #df['is_sell'] = 0
     df['BTO'] = 0
 
     max_high = df.high.rolling(4).max()
@@ -79,15 +81,17 @@ def drop_crap(df: pd.DataFrame()):
 
 features = [ 
     'ADX',
-    #'ADX_TREND', 
+    'MACD',
+    #'ADX_TREND',
+    #"SMA_STACKED",
     'SQZ_ON',
-            'RSI_9', 
-            #'RSI_14', 'RSI_FLAG', 
-            'PCTRET_1', 'PCTRET_5', 'PCTRET_10', 
-            'SMA_9', 'SMA_21', 'SMA_34',
-            'SMA_50', 
-            #'SMA_100', 'SMA_150'
-        ]
+    'RSI_9', 
+    'RSI_14', 'RSI_FLAG', 
+    'PCTRET_1', 'PCTRET_5', 'PCTRET_10', 
+    'SMA_9', 'SMA_21', 'SMA_34',
+    'SMA_50', 
+    'SMA_100', 'SMA_150'
+    ]
 
 
 #x = df.loc[:, features].values
@@ -190,7 +194,7 @@ def idxmax(s, w :int()):
     while i + w <= size:
         yield(s.iloc[i:i+w].idxmax())
         i += 1
-
+# %%
 def process_symbol(symbol):
     a0 = a1 = 0
     prices = pd.read_csv(f'datasets/{symbol}.csv.gz', index_col=0)
@@ -203,34 +207,43 @@ def process_symbol(symbol):
     save_df = df.copy()
     
     df['target'] = np.where(df.BTO + df.STO == 0, 'hold', 'tbd')
-    pca, model = model_train(df, features)
-    last_row = save_df.iloc[-1][features].values
-    expected = model_predict_one(pca, model, last_row)
-    a0 = model.__accuracy
-    #print(f'symbol={symbol:5s} prediction={expected} accuracy=')
-    if expected == 'hold': return None
+    pca1, model1 = model_train(df, features)
+    expected2 = model_predict_one(pca1, model1, save_df.iloc[-2][features].values)
+    expected1 = model_predict_one(pca1, model1, save_df.iloc[-1][features].values)
+    a0 = model1.__accuracy
     
     # Train for buy/sell
-    df = save_df.loc[(df.BTO == 1) | (df.STO == 1)].copy()   
-    df.target = np.where(df.BTO == 1, 'buy', 'sell')
-    
-    pca, model = model_train(df, features)
-    #last_rows = save_df.iloc[-1:2][features].values
-    last_row = save_df.iloc[-1][features].values
-    expected = model_predict_one(pca, model, last_row)
-    a1 = model.__accuracy
-    print(f'symbol={symbol:5s} prediction={expected:5s} a0={a0:0.2%} a1={a1:0.2%}')
+    if expected1 == expected2 == 'tbd':
+        df = save_df.loc[(df.BTO == 1) | (df.STO == 1)].copy()   
+        df.target = np.where(df.BTO == 1, 'buy', 'sell')
+        
+        pca, model = model_train(df, features)
+        expected2 = model_predict_one(pca, model, save_df.iloc[-2][features].values)
+        expected1 = model_predict_one(pca, model, save_df.iloc[-1][features].values)
+        a1 = model.__accuracy
+
+    df['ATR'] = df.ta.atr()
+    row = save_df.iloc[-1]
+    print(f'symbol={symbol:5s} p2={expected2:5s} p1={expected1:5s} a0={a0:04.0%} a1={a1:04.0%} close={row.close:03.2f}')
 
 ##process_symbol('M')
 #import sys
 #sys.exit()
-
-import re
-import glob
-p = re.compile('datasets/(.*?)\.')
-for filename in glob.glob('datasets/*.csv.gz'):
-    m = p.match(filename)
-    symbol = m.group(1)
-    process_symbol(symbol)
-
-print('Done')
+#%%
+def main():
+    import re
+    import glob
+    p = re.compile('datasets/(.*?)\.')
+    for filename in glob.glob('datasets/*.csv.gz'):
+        filename = filename.replace('\\','/')
+        m = p.match(filename)
+        if m is None:
+            print(f'filename={filename} NOMATCH')
+            continue
+        symbol = m.group(1)
+        process_symbol(symbol)
+    
+    print('Done')
+#%%
+if __name__ == "__main__":
+    main()

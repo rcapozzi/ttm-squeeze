@@ -196,7 +196,7 @@ def idxmax(s, w :int()):
         i += 1
 # %%
 def process_symbol(symbol):
-    a0 = a1 = 0
+    a0 = a1 = a2 = 0
     prices = pd.read_csv(f'datasets/{symbol}.csv.gz', index_col=0)
     df = add_features(prices)
     add_labels(df)
@@ -205,26 +205,36 @@ def process_symbol(symbol):
     df['signal'] = df.target
     df = df[df.index > '2016-01-01'].copy()
     save_df = df.copy()
-    
+
+###########
+    # One pass model
+    df['target'] = 'hold'
+    df.loc[ (df.BTO == 1 ) & (df.STO == 0), 'target' ] = 'buy'
+    df.loc[ (df.BTO == 0 ) & (df.STO == 1), 'target' ] = 'sell'
+    pca0, model0 = model_train(df, features)
+    expected0 = model_predict_one(pca0, model0, save_df.iloc[-1][features].values)
+    a0 = model0.__accuracy
+
+##############
     df['target'] = np.where(df.BTO + df.STO == 0, 'hold', 'tbd')
     pca1, model1 = model_train(df, features)
     expected2 = model_predict_one(pca1, model1, save_df.iloc[-2][features].values)
     expected1 = model_predict_one(pca1, model1, save_df.iloc[-1][features].values)
-    a0 = model1.__accuracy
+    a1 = model1.__accuracy
     
     # Train for buy/sell
     if expected1 == expected2 == 'tbd':
         df = save_df.loc[(df.BTO == 1) | (df.STO == 1)].copy()   
         df.target = np.where(df.BTO == 1, 'buy', 'sell')
         
-        pca, model = model_train(df, features)
-        expected2 = model_predict_one(pca, model, save_df.iloc[-2][features].values)
-        expected1 = model_predict_one(pca, model, save_df.iloc[-1][features].values)
-        a1 = model.__accuracy
+        pca2, model2 = model_train(df, features)
+        expected2 = model_predict_one(pca2, model2, save_df.iloc[-2][features].values)
+        expected1 = model_predict_one(pca2, model2, save_df.iloc[-1][features].values)
+        a2 = model2.__accuracy
 
     df['ATR'] = df.ta.atr()
     row = save_df.iloc[-1]
-    print(f'symbol={symbol:5s} p2={expected2:5s} p1={expected1:5s} a0={a0:04.0%} a1={a1:04.0%} close={row.close:03.2f}')
+    print(f'symbol={symbol:5s} p0={expected0:5s} p2={expected2:5s} p1={expected1:5s} a0={a0:04.0%} a1={a1:04.0%} a2={a2:04.0%} close={row.close:03.2f}')
 
 ##process_symbol('M')
 #import sys

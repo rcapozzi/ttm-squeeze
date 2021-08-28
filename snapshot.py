@@ -33,7 +33,7 @@ def junk():
     Path("datasets").mkdir(parents=True, exist_ok=True)
     Path("results").mkdir(parents=True, exist_ok=True)
 
-    symbols = pd.read_csv('sp100.csv', index_col=0)
+    symbols = pd.read_csv('all.csv', index_col=0)
     for symbol in symbols.Symbol:
         file = "datasets/{}.csv.gz".format(symbol)
         if os.path.isfile(file):
@@ -110,5 +110,5 @@ def update_datasets():
     if i > 5:
         return
 
+junk()
 update_datasets()
-#junk()

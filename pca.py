@@ -1,9 +1,6 @@
 #!/usr/bin/python3
 # # -*- coding: utf-8 -*-
 """
-Spyder Editor
-
-This is a temporary script file.
 """
 
 import numpy as np
@@ -25,9 +22,9 @@ def add_features(df :pd.DataFrame):
         df[key] = df.ta.sma(i) / df.close - 1
         features.append(key)
 
-    df['SMA_STACKED'] = 0.5
-    df.loc[(df.SMA_STACKED == 0.5) & (df.SMA_9 > df.SMA_21) & (df.SMA_21 > df.SMA_50) & (df.SMA_50 > df.SMA_100) , 'SMA_STACKED']  = 1
-    df.loc[(df.SMA_STACKED == 0.5) & (df.SMA_9 < df.SMA_21) & (df.SMA_21 < df.SMA_50) & (df.SMA_50 < df.SMA_100) , 'SMA_STACKED']  = 0
+    df['SMA_STACKED'] = 0
+    df.loc[(df.SMA_STACKED == 0) & (df.SMA_9 > df.SMA_21) & (df.SMA_21 > df.SMA_50) & (df.SMA_50 > df.SMA_100) , 'SMA_STACKED']  = 1
+    df.loc[(df.SMA_STACKED == 0) & (df.SMA_9 < df.SMA_21) & (df.SMA_21 < df.SMA_50) & (df.SMA_50 < df.SMA_100) , 'SMA_STACKED']  = -1
 
     for i in [9, 14]:
         key = 'RSI_' + str(i)
@@ -37,7 +34,7 @@ def add_features(df :pd.DataFrame):
     df['ADX_TREND'] = 0
     df.loc[ (df.ADX > 0.2) , 'ADX_TREND'] = 1
     
-    df['SQZ_ON'] = df.ta.squeeze().SQZ_ON
+    df['SQZ_ON'] = df.ta.squeeze().SQZ_ON.rolling(5).sum()/5
     
     df['RSI_FLAG'] = 0.5
     df.loc[(df.RSI_14 > 70), 'RSI_FLAG'] = 1
@@ -50,26 +47,26 @@ def add_features(df :pd.DataFrame):
 # FYI: Rolling includes the current period.
 def add_labels(df : pd.DataFrame()):
     value = 0.05
-    #df['is_buy'] = 0
-    #df['is_sell'] = 0
     df['BTO'] = 0
 
-    max_high = df.high.rolling(4).max()
-    min_low = df.low.rolling(4).min()
+    # max_high = df.high.rolling(4).max()
+    # min_low = df.low.rolling(4).min()
     #spread = max_high / min_low - 1
     #df['high_low_spread'] = spread / spread.rolling(20).mean()
     
+    # df['BTC'] = np.where(min_low / df.open - 1 < -value, 1, 0)
+    # df['STC'] = np.where(max_high / df.open - 1 > value, 1, 0)
 
-    df['BTC'] = np.where(min_low / df.open - 1 < -value, 1, 0)
-    df['STC'] = np.where(max_high / df.open - 1 > value, 1, 0)
-
-    # Look forward
-    lf_max_high = df.high.shift(3).rolling(4).max()
-    lf_min_low = df.low.shift(3).rolling(4).min()
+    # Look forward by 1st looking back, then walking forward
+    lf_max_high = df.high.shift(-5).rolling(5).max()
+    lf_min_low = df.low.shift(-5).rolling(5).min()
 
     df['BTO'] = np.where( lf_max_high / df.close - 1 > value, 1, 0)
     df['STO'] = np.where( lf_min_low / df.close - 1 < -value, 1, 0)
     df['target'] = np.where(df.BTO + df.STO == 0, 'hold', 'tbd')
+    df['lf_max_high'] = lf_max_high
+    df['lf_min_low'] =  lf_min_low
+
     return None
 
 def drop_crap(df: pd.DataFrame()):
@@ -137,7 +134,6 @@ def do_pca(df):
         ax.scatter(finalDf.loc[indicesToKeep, 'pc1'],
                    finalDf.loc[indicesToKeep, 'pc2'], c=color, s=50)
     ax.legend(targets)
-#do_pca(df)
 
 # Round two
 # test_size: what proportion of original data is used for test set
@@ -197,8 +193,8 @@ def idxmax(s, w :int()):
 # %%
 def process_symbol(symbol):
     a0 = a1 = a2 = 0
-    prices = pd.read_csv(f'datasets/{symbol}.csv.gz', index_col=0)
-    df = add_features(prices)
+    df = pd.read_csv(f'datasets/{symbol}.csv.gz', index_col=0)
+    df = add_features(df)
     add_labels(df)
     #drop_crap(df)
     df.dropna(inplace=True)
@@ -208,15 +204,15 @@ def process_symbol(symbol):
 
 ###########
     # One pass model
-    df['target'] = 'hold'
-    df.loc[ (df.BTO == 1 ) & (df.STO == 0), 'target' ] = 'buy'
-    df.loc[ (df.BTO == 0 ) & (df.STO == 1), 'target' ] = 'sell'
+    df['target'] = 'ICE'
+    df.loc[ (df.BTO == 1 ) & (df.STO == 0), 'target' ] = 'BTO'
+    df.loc[ (df.BTO == 0 ) & (df.STO == 1), 'target' ] = 'STO'
     pca0, model0 = model_train(df, features)
     expected0 = model_predict_one(pca0, model0, save_df.iloc[-1][features].values)
     a0 = model0.__accuracy
 
 ##############
-    df['target'] = np.where(df.BTO + df.STO == 0, 'hold', 'tbd')
+    df['target'] = np.where(df.BTO + df.STO == 0, 'ICE', 'tbd')
     pca1, model1 = model_train(df, features)
     expected2 = model_predict_one(pca1, model1, save_df.iloc[-2][features].values)
     expected1 = model_predict_one(pca1, model1, save_df.iloc[-1][features].values)
@@ -225,16 +221,18 @@ def process_symbol(symbol):
     # Train for buy/sell
     if expected1 == expected2 == 'tbd':
         df = save_df.loc[(df.BTO == 1) | (df.STO == 1)].copy()   
-        df.target = np.where(df.BTO == 1, 'buy', 'sell')
+        df.target = np.where(df.BTO == 1, 'BTO', 'STO')
         
         pca2, model2 = model_train(df, features)
         expected2 = model_predict_one(pca2, model2, save_df.iloc[-2][features].values)
         expected1 = model_predict_one(pca2, model2, save_df.iloc[-1][features].values)
         a2 = model2.__accuracy
 
+    # Count the matches (df.STO==1).sum()
     df['ATR'] = df.ta.atr()
     row = save_df.iloc[-1]
-    print(f'symbol={symbol:5s} p0={expected0:5s} p2={expected2:5s} p1={expected1:5s} a0={a0:04.0%} a1={a1:04.0%} a2={a2:04.0%} close={row.close:03.2f}')
+    score = a0 * a1 * a2
+    print(f'symbol={symbol:5s} score={score:03.0%} p0={expected0:3s} p2={expected2:3s} p1={expected1:3s} a0={a0:04.0%} a1={a1:04.0%} a2={a2:04.0%} close={row.close:03.2f}')
 
 ##process_symbol('M')
 #import sys
@@ -251,9 +249,17 @@ def main():
             print(f'filename={filename} NOMATCH')
             continue
         symbol = m.group(1)
-        process_symbol(symbol)
+        try:
+            process_symbol(symbol)
+        except:
+            print(f'ERROR symbol={symbol}')       
     
     print('Done')
 #%%
+# grep 'p0=STO p2=STO p1=STO' pca.out | sort -b -k 2 -r  | head -5
+# grep 'p0=BTO p2=BTO p1=BTO' pca.out | sort -b -k 2 -r  | head -5
+# symbol= 'ODFL'
+# process_symbol(symbol)
 if __name__ == "__main__":
     main()
+

@@ -3,10 +3,12 @@ numpy
 pandas
 pandas-datareader
 pandas_market_calendars
+pandas_ta
 plotly
 quantstats
 requests_cache
 sklearn
 sqlalchemy
-yfinance
 ta
+tensorflow
+yfinance

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+        #!/usr/bin/python3
 # # -*- coding: utf-8 -*-
 """
 """
@@ -29,17 +29,18 @@ def add_features(df :pd.DataFrame):
     for i in [9, 14]:
         key = 'RSI_' + str(i)
         df[key] = df.ta.rsi(i) / 100
+    df['RSI_FLAG'] = 0.5
+    df.loc[(df.RSI_9 > 70), 'RSI_FLAG'] = 1
+    df.loc[(df.RSI_9 < 30), 'RSI_FLAG'] = 0
+    df['RSI_SIGNAL'] = df.RSI_9 - df.RSI_9.rolling(9).mean();
+
 
     df['ADX'] = df.ta.adx().ADX_14/100
     df['ADX_TREND'] = 0
     df.loc[ (df.ADX > 0.2) , 'ADX_TREND'] = 1
     
     df['SQZ_ON'] = df.ta.squeeze().SQZ_ON.rolling(5).sum()/5
-    
-    df['RSI_FLAG'] = 0.5
-    df.loc[(df.RSI_14 > 70), 'RSI_FLAG'] = 1
-    df.loc[(df.RSI_14 < 30), 'RSI_FLAG'] = 0
-    
+       
     df['MACD'] = df.ta.macd().MACDs_12_26_9
 
     return df
@@ -64,14 +65,21 @@ def add_labels(df : pd.DataFrame()):
     df['BTO'] = np.where( lf_max_high / df.close - 1 > value, 1, 0)
     df['STO'] = np.where( lf_min_low / df.close - 1 < -value, 1, 0)
     df['target'] = np.where(df.BTO + df.STO == 0, 'hold', 'tbd')
-    df['lf_max_high'] = lf_max_high
-    df['lf_min_low'] =  lf_min_low
+    #df['lf_max_high'] = lf_max_high
+    #df['lf_min_low'] =  lf_min_low
 
     return None
 
+def prepare(symbol):
+    df =  pd.read_csv(f"datasets/{symbol}.csv.gz", index_col=0)
+    df = add_features(df)
+    add_labels(df)
+    return df
+
+
 def drop_crap(df: pd.DataFrame()):
     cols = df.columns
-    for c in ['open','high', 'low', 'close', 'volume']:
+    for c in ['open', 'high', 'low', 'close', 'volume']:
         if c in cols:
             del df[c]
     return None

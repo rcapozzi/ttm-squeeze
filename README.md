@@ -1,4 +1,6 @@
 # ttm-squeeze
+/Users/rcapozzi/Library/Python/3.9/bin/jupyter-lab
+
 TTM Squeeze Scanner For Stocks in Python using Pandas and YFinance
 
 ### Tutorial Video / Screencast on how to build this scanner can be found on my YouTube channel

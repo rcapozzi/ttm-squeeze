@@ -13,12 +13,7 @@ from tensorflow.keras.layers import Dense
 from pca import add_features
 from pca import add_labels
 #%%
-def prepare(symbol):
-    df =  pd.read_csv(f"datasets/{symbol}.csv.gz", index_col=0)
-    df = add_features(df)
-    add_labels(df)
-    return df
-    
+
 # %%
 def model_trade(symbol):
     df = prepare(symbol)

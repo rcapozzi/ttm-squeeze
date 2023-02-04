@@ -21,5 +21,5 @@ df.dropna(inplace=True)
 
 x = setup(data=df, target='target')
 best_model = compare_models()
-plot_model(dt, plot='feature')
-predict_model(dt, data=df)
+    plot_model(dt, plot='feature')
+    predict_model(dt, data=df)

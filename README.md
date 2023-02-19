@@ -7,6 +7,18 @@ TTM Squeeze Scanner For Stocks in Python using Pandas and YFinance
 
 https://www.youtube.com/watch?v=YhkNoOqYp9A
 
+# Getting Started
+
+```
+conda update -n base conda
+conda create -c conda-forge -n spyder-env --clone base
+conda activate spyder-env
+# Check path and Python versions
+conda config --env --add channels conda-forge
+conda config --env --set channel_priority strict
+conda install spyder spyder-kernels scikit-learn numpy scipy pandas matplotlib sympy cython -y
+```
+
 snapshot.py
 * Make this multi-threads. The YF download is multi-threaded, but you'd need to batch the symbols and you need to figure out the min start for that batch.
 

@@ -71,7 +71,7 @@ def yf_df_update(df):
     delta_df.symbol = df.symbol
     delta_df = yf_df_normalize(delta_df)
     
-    df = df.append(delta_df)
+    df = pd.concat([df, delta_df])
     df.filename = in_df.filename
     df.symbol = in_df.symbol
     if not df.empty:

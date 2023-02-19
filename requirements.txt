@@ -3,12 +3,12 @@ numpy
 pandas
 pandas-datareader
 pandas_market_calendars
-pandas_ta
+pandas-ta
 plotly
 quantstats
 requests_cache
-sklearn
 sqlalchemy
 ta
 tensorflow
 yfinance
+TA-Lib

@@ -75,7 +75,7 @@ def yf_df_update(df):
     df.filename = in_df.filename
     df.symbol = in_df.symbol
     if not df.empty:
-        print(f'filename={df.filename:<25s} symbol={df.symbol:5s} writing')
+        # print(f'filename={df.filename:<25s} symbol={df.symbol:5s} writing')
         df.to_csv(df.filename, index=True)
     else:
         print(f'filename={df.filename:<25s} symbol={df.symbol:5s} OPPS')
@@ -83,7 +83,7 @@ def yf_df_update(df):
     return df
 
 def yf_df_validate(p, filename):
-    print(f'filename={filename:<25s} Validating')
+    # print(f'filename={filename:<25s} Validating')
     m = p.match(filename)
     if not m: return None
     symbol = m.group(1)
@@ -109,6 +109,14 @@ def update_datasets():
         if df is not None: yf_df_update(df)
     if i > 5:
         return
+
+def yf_mass_download():
+    tickersdf = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+    tickers =  [i.replace('.','-') for i in tickersdf.Symbol.to_list()]
+    tickers.remove('WRK')
+    df = yf.download(tickers,start='2005-01-01',auto_adjust=True,progress=False,group_by="Ticker")
+    for ticker in tickers:
+        df[ticker].to_csv(f'datasets/{ticker}.csv.gz', index=True)
 
 junk()
 update_datasets()
